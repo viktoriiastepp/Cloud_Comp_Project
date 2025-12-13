@@ -1,64 +1,73 @@
+import { useState, useEffect } from "react";
 import { Star, Clock, Bike } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-const restaurants = [
-  {
-    name: "Burger Palace",
-    cuisine: "American • Burgers",
-    rating: 4.8,
-    deliveryTime: "15-25",
-    deliveryFee: "Free",
-    image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=300&fit=crop",
-    featured: true,
-  },
-  {
-    name: "Pizza Heaven",
-    cuisine: "Italian • Pizza",
-    rating: 4.9,
-    deliveryTime: "20-30",
-    deliveryFee: "$1.99",
-    image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&h=300&fit=crop",
-    featured: false,
-  },
-  {
-    name: "Green Bowl",
-    cuisine: "Healthy • Salads",
-    rating: 4.7,
-    deliveryTime: "10-20",
-    deliveryFee: "Free",
-    image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=300&fit=crop",
-    featured: true,
-  },
-  {
-    name: "Sushi Master",
-    cuisine: "Japanese • Sushi",
-    rating: 4.9,
-    deliveryTime: "25-35",
-    deliveryFee: "$2.99",
-    image: "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&h=300&fit=crop",
-    featured: false,
-  },
-  {
-    name: "Taco Fiesta",
-    cuisine: "Mexican • Tacos",
-    rating: 4.6,
-    deliveryTime: "15-25",
-    deliveryFee: "Free",
-    image: "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=400&h=300&fit=crop",
-    featured: false,
-  },
-  {
-    name: "Sweet Treats",
-    cuisine: "Desserts • Bakery",
-    rating: 4.8,
-    deliveryTime: "20-30",
-    deliveryFee: "$1.49",
-    image: "https://images.unsplash.com/photo-1551024601-bec78aea704b?w=400&h=300&fit=crop",
-    featured: true,
-  },
-];
-
 const FeaturedRestaurants = () => {
+  const [restaurants, setRestaurants] = useState<any[]>([]);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
+  const [meals, setMeals] = useState<any[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [orderId, setOrderId] = useState<string | null>(null);
+
+  // Fetch restaurants
+  useEffect(() => {
+    const fetchRestaurants = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/getrestaurants`);
+        const data = await res.json();
+        const updated = data.restaurants.map((r: any) => ({
+          ...r,
+          Rating: 5
+        }));
+        setRestaurants(updated);
+      } catch (err) {
+        console.error("Error loading restaurants:", err);
+      }
+    };
+    fetchRestaurants();
+  }, []);
+
+  // Fetch meals when restaurant clicked
+  const handleRestaurantClick = async (restaurant: any) => {
+    setSelectedRestaurant(restaurant);
+    setIsModalOpen(true);
+    setOrderId(null);
+
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/getmeals?restaurantId=${restaurant.RowKey}`);
+      const data = await res.json();
+
+      // Force all meals to use ImageURL; fallback to placeholder
+      const updatedMeals = data.meals.map((meal: any) => ({
+        ...meal,
+        ImageURL: meal.ImageURL || "https://via.placeholder.com/150"
+      }));
+
+      setMeals(updatedMeals);
+    } catch (err) {
+      console.error("Error fetching meals:", err);
+      setMeals([]);
+    }
+  };
+
+  // Handle ordering a meal
+  const handleOrder = async (meal: any) => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/ordermeal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mealName: meal.Name, restaurantId: selectedRestaurant.RowKey })
+      });
+      const data = await res.json();
+      setOrderId(data.orderId);
+      localStorage.setItem("currentOrderId", data.orderId);
+      alert(`Order placed! Your order ID is ${data.orderId}`);
+    } catch (err) {
+      console.error("Error placing order:", err);
+      alert("Failed to place order. Please try again.");
+    }
+  };
+
   return (
     <section id="restaurants" className="py-20">
       <div className="container">
@@ -79,49 +88,50 @@ const FeaturedRestaurants = () => {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {restaurants.map((restaurant, index) => (
             <article
-              key={restaurant.name}
+              key={restaurant.RowKey}
+              onClick={() => handleRestaurantClick(restaurant)}
               className="group bg-card rounded-2xl overflow-hidden card-shadow hover:card-shadow-hover transition-smooth hover:-translate-y-1 cursor-pointer animate-fade-in"
               style={{ animationDelay: `${index * 0.1}s` }}
             >
               <div className="relative h-48 overflow-hidden">
                 <img
-                  src={restaurant.image}
-                  alt={restaurant.name}
+                  src={restaurant.ImageURL || "https://via.placeholder.com/150"}
+                  alt={restaurant.Name}
                   className="w-full h-full object-cover transition-smooth group-hover:scale-105"
                 />
-                {restaurant.featured && (
+                {restaurant.Featured && (
                   <Badge className="absolute top-3 left-3 bg-accent text-accent-foreground border-0">
                     Featured
                   </Badge>
                 )}
-                {restaurant.deliveryFee === "Free" && (
+                {restaurant.DeliveryFee === "Free" && (
                   <Badge variant="secondary" className="absolute top-3 right-3">
                     Free Delivery
                   </Badge>
                 )}
               </div>
-              
+
               <div className="p-5">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <h3 className="font-bold text-lg text-foreground group-hover:text-primary transition-smooth">
-                    {restaurant.name}
+                    {restaurant.Name}
                   </h3>
                   <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10">
                     <Star className="h-4 w-4 text-primary fill-primary" />
-                    <span className="text-sm font-semibold text-primary">{restaurant.rating}</span>
+                    <span className="text-sm font-semibold text-primary">{restaurant.Rating}</span>
                   </div>
                 </div>
-                
-                <p className="text-sm text-muted-foreground mb-4">{restaurant.cuisine}</p>
-                
+
+                <p className="text-sm text-muted-foreground mb-4">{restaurant.Cuisine}</p>
+
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Clock className="h-4 w-4" />
-                    {restaurant.deliveryTime} min
+                    {restaurant.DeliveryTime} min
                   </span>
                   <span className="flex items-center gap-1">
                     <Bike className="h-4 w-4" />
-                    {restaurant.deliveryFee}
+                    {restaurant.DeliveryFee}
                   </span>
                 </div>
               </div>
@@ -129,6 +139,56 @@ const FeaturedRestaurants = () => {
           ))}
         </div>
       </div>
+
+      {/* Modal for meals */}
+      {isModalOpen && selectedRestaurant && (
+        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+          <div className="relative bg-white p-6 rounded-xl max-w-lg w-full overflow-y-auto max-h-[80vh]">
+            <h2 className="text-2xl font-bold mb-4 flex justify-between items-center">
+              {selectedRestaurant.Name} Menu
+              {orderId && (
+                <button
+                  className="ml-2 px-3 py-1 bg-secondary text-white rounded hover:bg-secondary/80 transition"
+                  onClick={() => window.open(`/order-status/${orderId}`, "_blank")}
+                >
+                  Check Order Status
+                </button>
+              )}
+            </h2>
+
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-800"
+            >
+              Close
+            </button>
+
+            <div className="grid gap-4">
+              {meals.length === 0 && <p>No meals available.</p>}
+              {meals.map((meal) => (
+                <div key={meal.Name} className="flex items-center gap-4 border-b pb-2">
+                  <img
+                    src={meal.ImageURL || "https://via.placeholder.com/150"}
+                    alt={meal.Name}
+                    className="w-20 h-20 object-cover rounded"
+                  />
+                  <div className="flex-1">
+                    <h3 className="font-semibold">{meal.Name}</h3>
+                    <p className="text-sm text-muted-foreground">{meal.Description}</p>
+                    <p className="text-primary font-bold">${meal.Price}</p>
+                    <button
+                      className="mt-2 px-3 py-1 bg-primary text-white rounded hover:bg-primary/80 transition"
+                      onClick={() => handleOrder(meal)}
+                    >
+                      Order
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

@@ -1,16 +1,18 @@
 {
+  "scriptFile": "__init__.py",
   "bindings": [
     {
       "authLevel": "anonymous",
       "type": "httpTrigger",
       "direction": "in",
+      "name": "req",
       "methods": ["get"],
-      "name": "req"
+      "route": "getmeals"
     },
     {
       "type": "http",
       "direction": "out",
-      "name": ""
+      "name": "$return"
     }
   ]
 }

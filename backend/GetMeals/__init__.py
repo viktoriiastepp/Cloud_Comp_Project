@@ -1,50 +1,41 @@
-import azure.functions as func
 import logging
+import azure.functions as func
+from azure.data.tables import TableClient
+import os
 import json
-from common.db import get_table_client
-from typing import List, Dict
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
-    logging.info("GetMealsByArea called")
-    area = req.params.get("area")
-    if not area:
-        try:
-            body = req.get_json()
-            area = body.get("area")
-        except Exception:
-            area = None
+    logging.info("GetMeals function called")
 
-    if not area:
-        return func.HttpResponse(json.dumps({"error": "Missing 'area' query parameter or body"}), status_code=400, mimetype="application/json")
+    connection_str = os.getenv("AzureWebJobsStorage")
+    table_name = "meals"  # meals table
+    restaurant_id = req.params.get("restaurantId", "").strip()
 
     try:
-        restaurants_table = get_table_client("Restaurants")
-        meals_table = get_table_client("Meals")
+        table_client = TableClient.from_connection_string(conn_str=connection_str, table_name=table_name)
+        meals = []
 
-        # Query restaurants by PartitionKey == area
-        restaurants = restaurants_table.query_entities(filter=f"PartitionKey eq '{area}'")
-        restaurants_list = list(restaurants)
+        for entity in table_client.list_entities():
+            # Filter by PartitionKey if restaurantId is provided
+            if restaurant_id and entity.get("PartitionKey") != restaurant_id:
+                continue
 
-        all_meals: List[Dict] = []
+            # Logging each meal for debugging
+            logging.info(f"Meal: {entity.get('Name', '')} - PartitionKey: {entity.get('PartitionKey')} - ImageURL: {entity.get('ImageURL')}")
 
-        for rest in restaurants_list:
-            rest_id = rest.get("RowKey")
-            # Query meals where PartitionKey == rest_id (RestaurantID)
-            meals = meals_table.query_entities(filter=f"PartitionKey eq '{rest_id}'")
-            for m in meals:
-                meal = {
-                    "RestaurantID": rest_id,
-                    "RestaurantName": rest.get("Name"),
-                    "MealID": m.get("RowKey"),
-                    "MealName": m.get("MealName"),
-                    "Description": m.get("Description"),
-                    "Price": m.get("Price"),
-                    "ImageUrl": m.get("ImageUrl"),
-                    "Available": m.get("Available", True)
-                }
-                all_meals.append(meal)
+            meals.append({
+                "Name": entity.get("Name", ""),
+                "Description": entity.get("Description", ""),
+                "Price": entity.get("Price", 0),
+                "ImageURL": entity.get("ImageURL", "")  # use table's image URL; empty string if missing
+            })
 
-        return func.HttpResponse(json.dumps({"meals": all_meals}), status_code=200, mimetype="application/json")
+        return func.HttpResponse(
+            json.dumps({"meals": meals}),
+            status_code=200,
+            mimetype="application/json"
+        )
+
     except Exception as e:
-        logging.exception("Error in GetMealsByArea")
-        return func.HttpResponse(json.dumps({"error": str(e)}), status_code=500, mimetype="application/json")
+        logging.error(f"Error fetching meals: {e}")
+        return func.HttpResponse(f"Error fetching meals: {str(e)}", status_code=500)
