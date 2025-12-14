@@ -21,13 +21,14 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 continue
 
             # Logging each meal for debugging
-            logging.info(f"Meal: {entity.get('Name', '')} - PartitionKey: {entity.get('PartitionKey')} - ImageURL: {entity.get('ImageURL')}")
+            logging.info(f"Meal: {entity.get('Name', '')} - PartitionKey: {entity.get('PartitionKey')} - RowKey: {entity.get('RowKey')}")
 
             meals.append({
+                "RowKey": entity.get("RowKey", ""),  # <-- add this
                 "Name": entity.get("Name", ""),
                 "Description": entity.get("Description", ""),
                 "Price": entity.get("Price", 0),
-                "ImageURL": entity.get("ImageURL", "")  # use table's image URL; empty string if missing
+                "ImageURL": entity.get("ImageURL", "")
             })
 
         return func.HttpResponse(
