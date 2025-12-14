@@ -32,7 +32,7 @@ const Header = () => {
           </Button>
           <Button variant="default" size="sm" className="gap-2">
             <ShoppingBag className="h-4 w-4" />
-            <span className="hidden sm:inline">Cart</span>
+            <span className="hidden sm:inline">Order Status</span>
           </Button>
         </div>
       </div>

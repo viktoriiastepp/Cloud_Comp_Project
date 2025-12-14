@@ -8,6 +8,7 @@ const FeaturedRestaurants = () => {
   const [meals, setMeals] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [estimatedTime, setEstimatedTime] = useState<number | null>(null);
 
   // Fetch restaurants
   useEffect(() => {
@@ -17,7 +18,7 @@ const FeaturedRestaurants = () => {
         const data = await res.json();
         const updated = data.restaurants.map((r: any) => ({
           ...r,
-          Rating: 5
+          Rating: 5,
         }));
         setRestaurants(updated);
       } catch (err) {
@@ -27,20 +28,30 @@ const FeaturedRestaurants = () => {
     fetchRestaurants();
   }, []);
 
-  // Fetch meals when restaurant clicked
+  // Fetch meals for a restaurant
   const handleRestaurantClick = async (restaurant: any) => {
     setSelectedRestaurant(restaurant);
     setIsModalOpen(true);
     setOrderId(null);
+    setEstimatedTime(null);
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/getmeals?restaurantId=${restaurant.RowKey}`);
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/getmeals?restaurantId=${restaurant.RowKey}`
+      );
       const data = await res.json();
 
-      // Force all meals to use ImageURL; fallback to placeholder
+      // 🔹 Log meals to inspect JSON
+      data.meals.forEach((meal: any, idx: number) => {
+        console.log(`Meal ${idx}:`, meal);
+      });
+
+
+      // Map meals and extract a unique MealID from RowKey or fallback to Name
       const updatedMeals = data.meals.map((meal: any) => ({
         ...meal,
-        ImageURL: meal.ImageURL || "https://via.placeholder.com/150"
+        ImageURL: meal.ImageURL || "https://via.placeholder.com/150",
+        MealID: meal.RowKey || meal.id || meal.Name || "", // <-- dynamic ID
       }));
 
       setMeals(updatedMeals);
@@ -50,21 +61,42 @@ const FeaturedRestaurants = () => {
     }
   };
 
-  // Handle ordering a meal
+  // Place an order
   const handleOrder = async (meal: any) => {
+    if (!selectedRestaurant) return;
+    if (!meal.MealID) {
+      alert("Cannot order this meal — missing MealID");
+      return;
+    }
+
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/ordermeal`, {
+      const body = {
+        RestaurantID: selectedRestaurant.RowKey,
+        Meals: [{ MealID: meal.MealID, Qty: 1 }],
+      };
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/submitorder`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mealName: meal.Name, restaurantId: selectedRestaurant.RowKey })
+        body: JSON.stringify(body),
       });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to place order");
+      }
+
       const data = await res.json();
-      setOrderId(data.orderId);
-      localStorage.setItem("currentOrderId", data.orderId);
-      alert(`Order placed! Your order ID is ${data.orderId}`);
-    } catch (err) {
+
+      setOrderId(data.OrderID);
+      setEstimatedTime(data.EstimatedDeliveryMinutes);
+
+      alert(
+        `Order placed! Your order ID is ${data.OrderID}. Estimated time: ${data.EstimatedDeliveryMinutes} mins`
+      );
+    } catch (err: any) {
       console.error("Error placing order:", err);
-      alert("Failed to place order. Please try again.");
+      alert(`Failed to place order. ${err.message || ""}`);
     }
   };
 
@@ -86,12 +118,11 @@ const FeaturedRestaurants = () => {
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {restaurants.map((restaurant, index) => (
+          {restaurants.map((restaurant) => (
             <article
               key={restaurant.RowKey}
               onClick={() => handleRestaurantClick(restaurant)}
-              className="group bg-card rounded-2xl overflow-hidden card-shadow hover:card-shadow-hover transition-smooth hover:-translate-y-1 cursor-pointer animate-fade-in"
-              style={{ animationDelay: `${index * 0.1}s` }}
+              className="group bg-card rounded-2xl overflow-hidden card-shadow hover:card-shadow-hover transition-smooth hover:-translate-y-1 cursor-pointer"
             >
               <div className="relative h-48 overflow-hidden">
                 <img
@@ -166,9 +197,9 @@ const FeaturedRestaurants = () => {
             <div className="grid gap-4">
               {meals.length === 0 && <p>No meals available.</p>}
               {meals.map((meal) => (
-                <div key={meal.Name} className="flex items-center gap-4 border-b pb-2">
+                <div key={meal.MealID} className="flex items-center gap-4 border-b pb-2">
                   <img
-                    src={meal.ImageURL || "https://via.placeholder.com/150"}
+                    src={meal.ImageURL}
                     alt={meal.Name}
                     className="w-20 h-20 object-cover rounded"
                   />
